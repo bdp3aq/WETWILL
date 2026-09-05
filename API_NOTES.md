@@ -86,7 +86,12 @@ Every ClickyDraft URL carries two IDs: a **league id** and a **league instance i
 
 ## Authentication
 
-Not documented in what was provided — the calls below were captured via the browser, so they're likely riding on a session cookie rather than a bearer token. **Open item:** open Chrome DevTools → Network tab (F12) on a live ClickyDraft session and check the request headers on any of the calls below (especially `Cookie`, and any custom header) to confirm how auth works before building a standalone client.
+**Confirmed:** cookie-based, standard Java web-app session auth — a `JSESSIONID` cookie (plus an optional `rememberme` cookie for persistence across browser restarts). No bearer token or custom header involved. `api_client.py`'s approach of replaying a raw `Cookie` header is correct as-is.
+
+Practical notes:
+- Capture the cookie value from DevTools → Network tab on any `draftapp/...` request → Request Headers → `Cookie`.
+- Treat it as a live credential: don't paste it into chat, commit it, or store it anywhere other than a local env var (`CLICKYDRAFT_COOKIE`) for the duration of a draft. It expires / can be invalidated by logging out and back in.
+- `rememberme` cookies of this shape are typically long-lived (weeks), so if one ever leaks, log out on clickydraft.com to invalidate it rather than just waiting.
 
 ## Endpoints
 

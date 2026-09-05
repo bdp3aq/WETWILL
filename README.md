@@ -50,15 +50,16 @@ Edit `config.yaml`:
   from League Settings) and the tool resolves the ID on startup.
 - `projections_csv` — see **Player projections** below.
 
-### Auth (open item — confirm before a live draft)
+### Auth
 
-ClickyDraft's auth mechanism isn't documented publicly. The working
-assumption (see `API_NOTES.md`) is a session cookie:
+**Confirmed** (see `API_NOTES.md`): cookie-based session auth (`JSESSIONID`,
+optionally `rememberme`) — no bearer token or custom header needed.
 
 1. Log into ClickyDraft in Chrome and open the league's draft room.
 2. DevTools (F12) → Network tab → find any `draftapp/...` request →
    Request Headers → copy the full `Cookie` value.
-3. Export it before running the tool:
+3. Export it locally before running the tool — **never paste it into chat,
+   commit it, or write it to a file**; it's a live session credential:
    ```bash
    export CLICKYDRAFT_COOKIE='paste the full cookie header here'
    ```
@@ -66,7 +67,8 @@ assumption (see `API_NOTES.md`) is a session cookie:
 If a request comes back with an auth error, the tool will say so
 explicitly (`ClickyDraftAuthError`) rather than silently returning empty
 data — that means the cookie is missing or has expired and needs
-re-capturing.
+re-capturing. If you ever paste or expose a cookie value by accident, log
+out and back into ClickyDraft to invalidate it.
 
 ### Player projections
 
@@ -139,7 +141,6 @@ outranks a real projection).
 
 Carried over from `API_NOTES.md`, still unresolved:
 
-- **Auth** hasn't been confirmed against a live ClickyDraft session yet.
 - **Roster construction field names** in the real League Settings response
   aren't confirmed — `roster.py` currently hard-codes the roster from the
   spec (QB, WR×2, RB×2, TE, FLEX, K, DEF, 7 bench) rather than reading it
