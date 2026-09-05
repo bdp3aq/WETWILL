@@ -89,6 +89,25 @@ Players with no projection available at all still show up in the table
 (flagged with `—`) rather than being silently dropped, so nothing
 disappears from the board unexpectedly mid-draft.
 
+### Fallback ranking (generic ADP — for players with no projection only)
+
+`data/Top-144 Player Rankings.xlsx` (Bradley-supplied) is a generic
+overall-rank/ADP list — no positions, no raw stats, and it's standard PPR
+scoring rather than this league's custom point values. Per the whole
+premise of this project (see `API_NOTES.md`: "generic ADP/rankings won't
+cut it"), it must never override the custom point-value ranking above.
+
+It's wired in as a **fallback ordering only**: for a player with no
+stat-based projection at all, the tool uses this file's rank (averaged
+across its two sheets if the player appears on both) just to give that
+player a sane position on the board relative to other unprojected
+players. Any player with a real projection always outranks every
+fallback-only player, regardless of ADP. Rows using this fallback are
+marked `ADP fallback (#N)` in the Score column so it's clear at a glance
+which recommendations are backed by the real scoring model and which
+aren't. Configure the path via `fallback_rankings_xlsx` in `config.yaml`
+(set it to `null`/omit to disable fallback ordering entirely).
+
 ## Running it
 
 ```bash
@@ -112,8 +131,9 @@ python -m pytest tests/
 
 Covers the scoring math (including the yardage bonus thresholds and DST
 points-allowed tiers), keeper ingestion, pick diffing (including
-`deleteAction`/`skipAction` handling), roster-needs slot filling, and the
-ranking/VOR logic.
+`deleteAction`/`skipAction` handling), roster-needs slot filling, the
+ranking/VOR logic, and the ADP fallback ordering (including that it never
+outranks a real projection).
 
 ## Known limitations / open items
 

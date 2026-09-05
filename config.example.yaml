@@ -20,6 +20,12 @@ poll_interval_seconds: 1.5
 # for this league instance, which is the case in the one sample response we have.
 projections_csv: data/projections.csv
 
+# Optional: generic ADP/overall-rank spreadsheet used ONLY as a fallback
+# ordering for players with no stat-based projection above (see README.md
+# "Player projections" and "Fallback ranking" — this never overrides the
+# custom point-value ranking).
+fallback_rankings_xlsx: "data/Top-144 Player Rankings.xlsx"
+
 # Env var holding the raw browser `Cookie` header value (see README.md "Auth").
 cookie_env_var: CLICKYDRAFT_COOKIE
 

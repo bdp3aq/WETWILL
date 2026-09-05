@@ -21,6 +21,9 @@ Full spec, API endpoints, scoring table, and open questions live in
 - `src/clickydraft_assistant/roster.py` — roster slot construction and
   open-need computation.
 - `src/clickydraft_assistant/ranking.py` — VOR + need-bonus ranking.
+- `src/clickydraft_assistant/fallback_rankings.py` — generic-ADP fallback
+  ordering (from `data/Top-144 Player Rankings.xlsx`) for players with no
+  stat-based projection only — must never outrank a real projection.
 - `src/clickydraft_assistant/api_client.py` — cookie-auth HTTP client for
   the three ClickyDraft REST endpoints.
 - `src/clickydraft_assistant/cli.py` / `display.py` — polling loop + rich

@@ -17,6 +17,7 @@ class AppConfig:
     my_team_name: str | None
     poll_interval_seconds: float
     projections_csv: str | None
+    fallback_rankings_xlsx: str | None
     num_teams: int
     cookie_env_var: str
     top_n: int
@@ -43,6 +44,7 @@ class AppConfig:
             my_team_name=raw.get("my_team_name"),
             poll_interval_seconds=float(raw.get("poll_interval_seconds", 1.5)),
             projections_csv=raw.get("projections_csv"),
+            fallback_rankings_xlsx=raw.get("fallback_rankings_xlsx"),
             num_teams=int(raw.get("num_teams", 14)),
             cookie_env_var=raw.get("cookie_env_var", "CLICKYDRAFT_COOKIE"),
             top_n=int(raw.get("top_n", 15)),

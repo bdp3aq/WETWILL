@@ -39,13 +39,15 @@ def render_recommendations_table(ranked: list[RankedPlayer], needs: RosterNeeds,
     table.add_column("Bye", justify="right")
 
     for i, r in enumerate(ranked[:top_n], start=1):
-        if not r.has_projection:
-            proj, vor, bonus, score = ("—", "—", "—", "—")
-        else:
+        if r.has_projection:
             proj = f"{r.projected_points:.1f}"
             vor = f"{r.vor:+.1f}"
             bonus = f"{r.need_bonus:+.1f}" if r.need_bonus else "0.0"
             score = f"{r.final_score:.1f}"
+        elif r.fallback_rank is not None:
+            proj, vor, bonus, score = ("no proj.", "—", "—", f"ADP fallback (#{r.fallback_rank:.0f})")
+        else:
+            proj, vor, bonus, score = ("no proj.", "—", "—", "—")
         table.add_row(
             str(i),
             r.player.full_name,

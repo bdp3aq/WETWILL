@@ -19,6 +19,7 @@ from rich.live import Live
 from .api_client import ClickyDraftAuthError, ClickyDraftClient
 from .config import AppConfig
 from .display import render_screen
+from .fallback_rankings import XlsxAdpFallback
 from .models import Pick, Player, Team
 from .projections import CSVProjectionSource, ProjectionLookup
 from .ranking import rank_available_players
@@ -95,6 +96,14 @@ def run_loop(config: AppConfig, once: bool = False) -> None:
         )
     projection_lookup = ProjectionLookup(csv_source=projection_source)
 
+    fallback_source = None
+    if config.fallback_rankings_xlsx and Path(config.fallback_rankings_xlsx).exists():
+        fallback_source = XlsxAdpFallback(config.fallback_rankings_xlsx)
+        console.print(
+            f"[dim]Loaded ADP fallback ordering from '{config.fallback_rankings_xlsx}' "
+            "(used only for players with no stat-based projection).[/]"
+        )
+
     recent_events: deque = deque(maxlen=50)
 
     def poll_once() -> None:
@@ -114,6 +123,7 @@ def run_loop(config: AppConfig, once: bool = False) -> None:
             projection_lookup,
             roster_needs=needs if my_team_id is not None else None,
             num_teams=config.num_teams,
+            fallback_source=fallback_source,
         )
         screen = render_screen(ranked, needs, config.top_n, recent_events, state, board_url=config.board_url)
         return screen

@@ -18,12 +18,18 @@ pins down):
    only the flex slot), so a merely-good player who plugs a real hole
    outranks a slightly-better player at an already-full position.
 4. final_score = VOR + need_bonus, sorted descending.
+
+Players with no stat-based projection get no real final_score at all —
+they're ordered *beneath every projected player* using an optional generic
+ADP fallback (fallback_rankings.py) purely so the board isn't arbitrarily
+ordered, never as a substitute for the custom point-value ranking above.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .fallback_rankings import XlsxAdpFallback
 from .models import Player, normalize_position
 from .projections import ProjectionLookup
 from .roster import RosterNeeds
@@ -53,6 +59,7 @@ class RankedPlayer:
     need_bonus: float
     final_score: float
     has_projection: bool
+    fallback_rank: float | None = None
 
     @property
     def position(self) -> str:
@@ -90,6 +97,7 @@ def rank_available_players(
     roster_needs: RosterNeeds | None = None,
     scoring_settings: ScoringSettings | None = None,
     num_teams: int = 14,
+    fallback_source: XlsxAdpFallback | None = None,
 ) -> list[RankedPlayer]:
     scoring_settings = scoring_settings or ScoringSettings()
 
@@ -105,14 +113,21 @@ def rank_available_players(
 
     replacement_levels = _replacement_levels(points_by_position, num_teams)
 
+    real_scores = []
     ranked: list[RankedPlayer] = []
     for player in available_players:
         points, has_projection = projected[player.draftable_player_id]
         position = player.primary_position
         replacement = replacement_levels.get(position, 0.0)
-        vor = points - replacement if has_projection else float("-inf")
         bonus = _need_bonus(position, roster_needs)
-        final_score = vor + bonus if has_projection else float("-inf")
+        fallback_rank = fallback_source.get_rank(player) if (fallback_source and not has_projection) else None
+        if has_projection:
+            vor = points - replacement
+            final_score = vor + bonus
+            real_scores.append(final_score)
+        else:
+            vor = float("-inf")
+            final_score = float("-inf")
         ranked.append(
             RankedPlayer(
                 player=player,
@@ -122,8 +137,21 @@ def rank_available_players(
                 need_bonus=bonus,
                 final_score=final_score,
                 has_projection=has_projection,
+                fallback_rank=fallback_rank,
             )
         )
 
-    ranked.sort(key=lambda r: r.final_score, reverse=True)
+    # Fallback-ranked players sort below every real-scored player, ordered
+    # among themselves by (averaged) generic-ADP rank; players with neither
+    # a real projection nor a fallback rank sort dead last of all.
+    fallback_ceiling = (min(real_scores) if real_scores else 0.0) - 1_000_000.0
+
+    def sort_key(r: RankedPlayer) -> float:
+        if r.has_projection:
+            return r.final_score
+        if r.fallback_rank is not None:
+            return fallback_ceiling - r.fallback_rank
+        return float("-inf")
+
+    ranked.sort(key=sort_key, reverse=True)
     return ranked

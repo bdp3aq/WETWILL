@@ -19,6 +19,14 @@ def make_player(pid, position, name=None):
     return Player(draftable_player_id=pid, first_name=name, last_name="X", positions=[position])
 
 
+class FakeFallbackSource:
+    def __init__(self, rank_by_id):
+        self.rank_by_id = rank_by_id
+
+    def get_rank(self, player):
+        return self.rank_by_id.get(player.draftable_player_id)
+
+
 class TestRanking(unittest.TestCase):
     def test_higher_projected_points_ranks_first_within_position(self):
         players = [make_player(1, "RB"), make_player(2, "RB")]
@@ -71,6 +79,44 @@ class TestRanking(unittest.TestCase):
         qb1_entry = next(r for r in ranked if r.player.draftable_player_id == 100)
         top_rb_entry = next(r for r in ranked if r.player.draftable_player_id == 1)
         self.assertGreater(qb1_entry.vor, top_rb_entry.vor)
+
+
+class TestFallbackRankingNeverOutranksRealProjection(unittest.TestCase):
+    def test_fallback_only_orders_players_without_a_projection(self):
+        # Player 1 has a weak but real projection; player 2 has none but a
+        # great (rank 1) ADP fallback rank. The real projection must still win.
+        weak_real = make_player(1, "WR")
+        strong_adp_no_stats = make_player(2, "WR")
+        stats = {1: {"rec_yds": 10}}  # tiny real projection
+        lookup = ProjectionLookup(csv_source=FakeProjectionSource(stats))
+        fallback = FakeFallbackSource({2: 1.0})  # best possible ADP rank
+
+        ranked = rank_available_players(
+            [weak_real, strong_adp_no_stats], lookup, num_teams=14, fallback_source=fallback
+        )
+        self.assertEqual(ranked[0].player.draftable_player_id, 1)
+        self.assertTrue(ranked[0].has_projection)
+        self.assertFalse(ranked[1].has_projection)
+
+    def test_fallback_players_ordered_by_rank_among_themselves(self):
+        p1 = make_player(1, "WR")
+        p2 = make_player(2, "WR")
+        lookup = ProjectionLookup(csv_source=FakeProjectionSource({}))
+        fallback = FakeFallbackSource({1: 50.0, 2: 5.0})
+
+        ranked = rank_available_players([p1, p2], lookup, num_teams=14, fallback_source=fallback)
+        self.assertEqual(ranked[0].player.draftable_player_id, 2)  # better (lower) ADP rank first
+        self.assertEqual(ranked[1].player.draftable_player_id, 1)
+
+    def test_player_with_neither_projection_nor_fallback_ranks_last(self):
+        has_fallback = make_player(1, "WR")
+        has_nothing = make_player(2, "WR")
+        lookup = ProjectionLookup(csv_source=FakeProjectionSource({}))
+        fallback = FakeFallbackSource({1: 10.0})
+
+        ranked = rank_available_players([has_fallback, has_nothing], lookup, num_teams=14, fallback_source=fallback)
+        self.assertEqual(ranked[0].player.draftable_player_id, 1)
+        self.assertEqual(ranked[1].player.draftable_player_id, 2)
 
 
 if __name__ == "__main__":
