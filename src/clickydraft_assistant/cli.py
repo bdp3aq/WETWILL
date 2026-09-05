@@ -58,6 +58,8 @@ def run_loop(config: AppConfig, once: bool = False) -> None:
             "See README.md."
         )
 
+    console.print(f"[bold]Live draft board:[/] {config.board_url}")
+
     client = ClickyDraftClient(
         league_id=config.league_id,
         league_instance_id=config.league_instance_id,
@@ -113,7 +115,7 @@ def run_loop(config: AppConfig, once: bool = False) -> None:
             roster_needs=needs if my_team_id is not None else None,
             num_teams=config.num_teams,
         )
-        screen = render_screen(ranked, needs, config.top_n, recent_events, state)
+        screen = render_screen(ranked, needs, config.top_n, recent_events, state, board_url=config.board_url)
         return screen
 
     if once:

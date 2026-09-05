@@ -80,8 +80,11 @@ def render_screen(
     top_n: int,
     events: deque,
     state,
+    board_url: str | None = None,
 ) -> Group:
-    return Group(
-        render_recommendations_table(ranked, needs, top_n),
-        render_recent_picks(events, state),
-    )
+    parts = []
+    if board_url:
+        parts.append(Text.from_markup(f"[bold]Live draft board:[/] {board_url}"))
+    parts.append(render_recommendations_table(ranked, needs, top_n))
+    parts.append(render_recent_picks(events, state))
+    return Group(*parts)

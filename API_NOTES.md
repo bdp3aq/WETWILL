@@ -8,7 +8,8 @@ Build a tool that connects to ClickyDraft's live draft data during a real draft 
 
 ## Bradley's League
 
-- League URL: `https://clickydraft.com/draftapp/dashboard/leagues/305751/instances/305775`
+- League dashboard URL: `https://clickydraft.com/draftapp/dashboard/leagues/305751/instances/305775`
+- Live draft board URL: `https://clickydraft.com/draftapp/board/305775` — the actual draft-room page Bradley uses during the live draft. Note the different path shape: `draftapp/board/{leagueInstanceId}` takes only the instance ID, no league ID segment — consistent with the API endpoints below, which mostly key off the instance ID too.
 - **League ID:** `305751`
 - **League Instance ID:** `305775`
 

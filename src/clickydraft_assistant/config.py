@@ -25,6 +25,12 @@ class AppConfig:
     def cookie(self) -> str | None:
         return os.environ.get(self.cookie_env_var)
 
+    @property
+    def board_url(self) -> str:
+        """The live draft-room page Bradley actually drafts from (distinct from the
+        dashboard/settings URL — see API_NOTES.md "Bradley's League")."""
+        return f"https://clickydraft.com/draftapp/board/{self.league_instance_id}"
+
     @classmethod
     def load(cls, path: str | Path) -> "AppConfig":
         path = Path(path)
