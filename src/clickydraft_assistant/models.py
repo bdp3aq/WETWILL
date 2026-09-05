@@ -88,6 +88,7 @@ class Pick:
     delete_action: bool
     skip_action: bool
     player: Optional[Player] = None
+    draft_timer: Optional[Any] = None
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -109,5 +110,6 @@ class Pick:
             delete_action=bool(data.get("deleteAction")),
             skip_action=bool(data.get("skipAction")),
             player=Player.from_api(player_data) if player_data else None,
+            draft_timer=data.get("draftTimer"),
             raw=data,
         )

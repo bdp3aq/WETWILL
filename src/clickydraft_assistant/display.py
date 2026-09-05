@@ -83,10 +83,13 @@ def render_screen(
     events: deque,
     state,
     board_url: str | None = None,
+    autopick_status: str | None = None,
 ) -> Group:
     parts = []
     if board_url:
         parts.append(Text.from_markup(f"[bold]Live draft board:[/] {board_url}"))
+    if autopick_status is not None:
+        parts.append(Text.from_markup(f"[bold yellow]Autopick safety net:[/] {autopick_status}"))
     parts.append(render_recommendations_table(ranked, needs, top_n))
     parts.append(render_recent_picks(events, state))
     return Group(*parts)

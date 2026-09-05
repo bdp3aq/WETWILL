@@ -2,9 +2,21 @@
 
 Seed document for the Claude Code build. Starting context for this project.
 
+> **Scope amendment (post-initial-build):** the original spec below was
+> strictly recommendation-only, no auto-draft. Bradley later explicitly
+> requested one narrow addition: an **opt-in autopick safety net** — off
+> by default — that can submit his own top recommendation as a last
+> resort if he hasn't picked himself and his clock is about to expire, so
+> a missed slot goes to this tool's custom-scoring pick instead of to
+> ClickyDraft's own generic autopick. It is NOT full auto-draft: manual
+> picking stays the default and primary mode. See `README.md` "Autopick
+> safety net" and `src/clickydraft_assistant/autopick.py` for the exact
+> scope and safety gating. The rest of this document is the original,
+> unmodified spec.
+
 ## Goal
 
-Build a tool that connects to ClickyDraft's live draft data during a real draft and continuously recomputes player rankings using a custom point-value system tied to this league's scoring settings (not generic ADP or default projections), so Bradley can make better picks in real time. **Scope is live recommendation surfacing only — no auto-draft / auto-submit.** Draft results get uploaded into Yahoo afterward for scoring, so the ranking logic should reflect Yahoo scoring settings for this league.
+Build a tool that connects to ClickyDraft's live draft data during a real draft and continuously recomputes player rankings using a custom point-value system tied to this league's scoring settings (not generic ADP or default projections), so Bradley can make better picks in real time. **Scope is live recommendation surfacing only — no auto-draft / auto-submit.** (See the scope amendment above for the one narrow, opt-in exception added later.) Draft results get uploaded into Yahoo afterward for scoring, so the ranking logic should reflect Yahoo scoring settings for this league.
 
 ## Bradley's League
 
@@ -190,11 +202,13 @@ if (jsonItem.draftablePlayerId && jsonItem.posInRound && !jsonItem.deleteAction 
 
 ## Open questions / still needed
 
-- **Auth mechanism** — confirm via Network tab (cookie vs token) before building a standalone client outside the browser session.
-- **Roster construction rules** (bench size, position slots, flex eligibility) — should be in the League Settings response; confirm exact field names against a real response.
-- Confirm the preloaded-keeper picks are visible via the Picks endpoint before the draft officially opens (vs. only appearing once the draft starts) — matters for step 1 above.
+- **Auth mechanism** — ~~confirm via Network tab~~ **confirmed**: cookie-based session auth (`JSESSIONID`, optionally `rememberme`), no bearer token or custom header. See "Authentication" above.
+- **Roster construction rules** (bench size, position slots, flex eligibility) — should be in the League Settings response; confirm exact field names against a real response. Still open — `roster.py` currently hard-codes the roster from this spec rather than reading it from the API.
+- Confirm the preloaded-keeper picks are visible via the Picks endpoint before the draft officially opens (vs. only appearing once the draft starts) — matters for step 1 above. Still open.
 - There are other calls beyond the four above that exist on the API; if a specific piece of data is needed later, it can likely be found via the Network tab or by asking directly.
 - **Player projections** — the sample `draftablePlayer.projectedStats` field is `null`. The scoring engine needs per-player projected raw stats (completions, yards, TDs, etc.) to turn into fantasy points via the league's custom point values. If ClickyDraft doesn't populate `projectedStats` for this league, an external projections source (CSV import) is required — see `README.md`.
+- **[New, for the autopick safety net only] Pick-submission endpoint** — none of the four calls above are a write endpoint. The autopick safety net (see scope amendment) needs to know the method/URL/body ClickyDraft's own UI uses to submit a pick. Nobody has captured this yet — see `src/clickydraft_assistant/api_client.py`'s `submit_pick` docstring for exactly what to capture. Until it's captured, `submit_pick` is a stub that always raises, so the safety net can only ever run in dry-run mode.
+- **[New, for the autopick safety net only] "Seconds remaining on the clock" source** — the sample Pick object's `draftTimer` field is `null` on a completed pick; its meaning (if any) for an in-progress turn is unconfirmed, and might only live on the websocket stream this project otherwise avoids. See `src/clickydraft_assistant/draft_timer.py` — it's currently a stub that always returns `None`, which by design keeps the autopick safety net from ever firing until this is resolved.
 
 ## Next steps
 

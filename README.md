@@ -6,9 +6,13 @@ draft and ranks the remaining player pool using this league's *actual*
 custom Yahoo scoring settings — not generic ADP — combined with Bradley's
 positional roster needs.
 
-**This tool never drafts anything.** It only reads from ClickyDraft and
-prints recommendations to the console. Picks are made by Bradley, by hand,
-in the ClickyDraft UI.
+**By default, this tool never drafts anything** — it only reads from
+ClickyDraft and prints recommendations to the console; picks are made by
+Bradley, by hand, in the ClickyDraft UI. There's one narrow, **opt-in**
+exception: an autopick safety net that can submit a pick as a last resort
+if Bradley hasn't picked himself and his clock is about to expire. It's
+off by default and requires deliberate, double opt-in to activate — see
+**Autopick safety net** below before touching it.
 
 See `API_NOTES.md` for the full API/spec write-up this was built from.
 
@@ -34,6 +38,61 @@ See `API_NOTES.md` for the full API/spec write-up this was built from.
      Bradley's still-open starting slots (bigger bonus for a dedicated
      slot than for only the flex spot).
 4. Render a live top-N recommendation table plus a recent-picks feed.
+
+## Autopick safety net (opt-in, off by default)
+
+This tool's core purpose is recommendation-only — see `API_NOTES.md`'s
+original spec. One narrow addition was made on top of that: an **opt-in
+safety net** that can submit Bradley's own top recommendation as a last
+resort, but only if he hasn't picked himself and his own clock is about
+to run out. The point isn't to draft *for* him — it's so that a missed
+slot (stepped away, lost connection, timer surprise) goes to this tool's
+custom-scoring pick instead of to ClickyDraft's own generic autopick,
+which knows nothing about this league's scoring.
+
+**It is off by default**, and firing requires ALL of the following —
+see `src/clickydraft_assistant/autopick.py` for the exact logic:
+
+1. `autopick.enabled: true` in `config.yaml` (default `false`).
+2. It's unambiguously Bradley's turn — inferred from the actual pick
+   history (`turn.py`), never guessed. **Known limitation:** because this
+   is inferred purely from observed picks, the tool can't know Bradley's
+   round-1 slot until every team's round-1 pick has landed — so the
+   safety net is inert for the entire first round and only becomes
+   active from round 2 onward. This is intentional caution, not a bug.
+3. A *confirmed* reading of seconds remaining on Bradley's clock, at or
+   below `autopick.trigger_seconds_remaining` (default 10s). **This isn't
+   wired up yet** — see "Two things that still need to be captured"
+   below. Until it is, `draft_timer.py` always reports "unknown," and by
+   design an unknown timer state means the safety net never fires (an
+   unknown state is treated as "don't act," not "assume it's urgent").
+4. A genuine top recommendation exists with a real stat-based projection
+   (never falls back to an ADP-only-ranked player, never submits nothing).
+5. **Double opt-in for real submission:** even when all of the above
+   line up, actually submitting a pick additionally requires passing
+   `--confirm-autopick-submit` on the command line every time you run the
+   tool. Without it, an armed decision only ever logs `[DRY RUN] Autopick
+   would submit <player> now` — nothing is sent to ClickyDraft.
+
+### Two things that still need to be captured before this can submit anything for real
+
+Both are stubs today, and both need one more round of live-session
+DevTools capture (same idea as `scripts/inspect_api.py`):
+
+1. **The actual pick-submission request.** None of the three read
+   endpoints in `API_NOTES.md` is a write call. `api_client.py`'s
+   `submit_pick` is a stub that always raises `NotImplementedError` — see
+   its docstring for exactly what to capture (method, URL, request body)
+   the next time a pick goes out through the ClickyDraft UI.
+2. **Where "seconds remaining" actually lives.** `draft_timer.py`'s
+   `read_seconds_remaining` always returns `None` today. It needs
+   confirming whether that's a League Settings field, something that
+   appears on the Picks response only while a turn is active, or only
+   available on the websocket stream this project otherwise intentionally
+   skips.
+
+Until both are done, enabling `autopick.enabled` is safe to leave on if
+you want — it will only ever print dry-run log lines, never act.
 
 ## Setup
 
@@ -122,6 +181,11 @@ clickydraft-assistant
 
 # Custom config path:
 clickydraft-assistant --config path/to/config.yaml
+
+# Only relevant if config.yaml has autopick.enabled: true — required in
+# addition to that before the safety net will actually submit a pick
+# rather than just logging what it would have done:
+clickydraft-assistant --confirm-autopick-submit
 ```
 
 ## Tests
@@ -134,8 +198,10 @@ python -m pytest tests/
 Covers the scoring math (including the yardage bonus thresholds and DST
 points-allowed tiers), keeper ingestion, pick diffing (including
 `deleteAction`/`skipAction` handling), roster-needs slot filling, the
-ranking/VOR logic, and the ADP fallback ordering (including that it never
-outranks a real projection).
+ranking/VOR logic, the ADP fallback ordering (including that it never
+outranks a real projection), snake-order turn inference, and the autopick
+safety net's decision logic (including all the conditions that must hold
+before it fires).
 
 ## Known limitations / open items
 
@@ -152,6 +218,9 @@ Carried over from `API_NOTES.md`, still unresolved:
 - **Player projections**: no projections source is wired up beyond the
   CSV fallback — `data/projections.csv` needs to be populated with real
   season projections before a live draft (see above).
+- **Autopick safety net is dry-run only** — the real pick-submission
+  endpoint and the "seconds remaining" timer source are both unconfirmed
+  stubs. See "Autopick safety net" above for exactly what's missing.
 - The websocket stream (`wss://stream1.clickydraft.com/ws/{leagueInstanceId}`)
   is intentionally not used, per the recommendation in `API_NOTES.md` —
   polling is simpler and avoids reconnect/parsing complexity.
