@@ -62,10 +62,10 @@ see `src/clickydraft_assistant/autopick.py` for the exact logic:
    active from round 2 onward. This is intentional caution, not a bug.
 3. A *confirmed* reading of seconds remaining on Bradley's clock, at or
    below `autopick.trigger_seconds_remaining` (default 10s). **This isn't
-   wired up yet** — see "Two things that still need to be captured"
-   below. Until it is, `draft_timer.py` always reports "unknown," and by
-   design an unknown timer state means the safety net never fires (an
-   unknown state is treated as "don't act," not "assume it's urgent").
+   wired up yet** — see "What's still missing" below. Until it is,
+   `draft_timer.py` always reports "unknown," and by design an unknown
+   timer state means the safety net never fires (an unknown state is
+   treated as "don't act," not "assume it's urgent").
 4. A genuine top recommendation exists with a real stat-based projection
    (never falls back to an ADP-only-ranked player, never submits nothing).
 5. **Double opt-in for real submission:** even when all of the above
@@ -74,25 +74,28 @@ see `src/clickydraft_assistant/autopick.py` for the exact logic:
    tool. Without it, an armed decision only ever logs `[DRY RUN] Autopick
    would submit <player> now` — nothing is sent to ClickyDraft.
 
-### Two things that still need to be captured before this can submit anything for real
+### What's still missing before this can submit anything for real
 
-Both are stubs today, and both need one more round of live-session
-DevTools capture (same idea as `scripts/inspect_api.py`):
+- **The pick-submission request is confirmed and implemented** — captured
+  from a real successful pick in Bradley's own draft
+  (`POST .../picks/`, see `API_NOTES.md` "5. Submit Pick"). `api_client.py`'s
+  `submit_pick` sends the real request now, not a stub.
+- **Where "seconds remaining" actually lives is still unconfirmed.**
+  `draft_timer.py`'s `read_seconds_remaining` always returns `None` today.
+  Use `scripts/watch_for_timer_field.py` during Bradley's own turn to spot
+  it automatically (it diffs consecutive polls and prints whatever
+  changes) — if nothing changes there while his clock visibly counts
+  down, it likely only lives on the websocket stream this project
+  otherwise intentionally skips, which would need a browser-based
+  capture instead (DevTools → Network → filter to `WS` → Messages tab).
 
-1. **The actual pick-submission request.** None of the three read
-   endpoints in `API_NOTES.md` is a write call. `api_client.py`'s
-   `submit_pick` is a stub that always raises `NotImplementedError` — see
-   its docstring for exactly what to capture (method, URL, request body)
-   the next time a pick goes out through the ClickyDraft UI.
-2. **Where "seconds remaining" actually lives.** `draft_timer.py`'s
-   `read_seconds_remaining` always returns `None` today. It needs
-   confirming whether that's a League Settings field, something that
-   appears on the Picks response only while a turn is active, or only
-   available on the websocket stream this project otherwise intentionally
-   skips.
-
-Until both are done, enabling `autopick.enabled` is safe to leave on if
-you want — it will only ever print dry-run log lines, never act.
+**This is now the only remaining blocker.** Once it's resolved, enabling
+`autopick.enabled` + `--confirm-autopick-submit` will make the safety net
+capable of actually submitting a pick — test that combination carefully
+(e.g. on a late, low-stakes bench slot) before trusting it on a pick that
+matters. Until then, enabling `autopick.enabled` is safe to leave on if
+you want — condition 3 above will never be met, so it will only ever
+print dry-run log lines, never act.
 
 ## Setup
 
@@ -199,9 +202,11 @@ Covers the scoring math (including the yardage bonus thresholds and DST
 points-allowed tiers), keeper ingestion, pick diffing (including
 `deleteAction`/`skipAction` handling), roster-needs slot filling, the
 ranking/VOR logic, the ADP fallback ordering (including that it never
-outranks a real projection), snake-order turn inference, and the autopick
-safety net's decision logic (including all the conditions that must hold
-before it fires).
+outranks a real projection), snake-order turn inference (including the
+round/posInRound math that matches the real captured submission
+request), the autopick safety net's decision logic (including all the
+conditions that must hold before it fires), and `submit_pick`'s request
+shape (mocked HTTP — no real network calls in tests).
 
 ## Known limitations / open items
 
@@ -218,9 +223,10 @@ Carried over from `API_NOTES.md`, still unresolved:
 - **Player projections**: no projections source is wired up beyond the
   CSV fallback — `data/projections.csv` needs to be populated with real
   season projections before a live draft (see above).
-- **Autopick safety net is dry-run only** — the real pick-submission
-  endpoint and the "seconds remaining" timer source are both unconfirmed
-  stubs. See "Autopick safety net" above for exactly what's missing.
+- **Autopick safety net is still dry-run only** — the pick-submission
+  endpoint is now confirmed and implemented, but the "seconds remaining"
+  timer source is still an unconfirmed stub, which by design keeps the
+  safety net from ever firing for real. See "Autopick safety net" above.
 - The websocket stream (`wss://stream1.clickydraft.com/ws/{leagueInstanceId}`)
   is intentionally not used, per the recommendation in `API_NOTES.md` —
   polling is simpler and avoids reconnect/parsing complexity.

@@ -18,7 +18,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.live import Live
 
-from .api_client import ClickyDraftAuthError, ClickyDraftClient
+from .api_client import ClickyDraftAPIError, ClickyDraftAuthError, ClickyDraftClient
 from .autopick import evaluate_autopick
 from .config import AppConfig
 from .display import render_screen
@@ -29,7 +29,7 @@ from .projections import CSVProjectionSource, ProjectionLookup
 from .ranking import rank_available_players
 from .roster import compute_roster_needs
 from .state import DraftState
-from .turn import current_overall_pick_number, infer_draft_order
+from .turn import current_overall_pick_number, infer_draft_order, round_and_pos_in_round
 
 console = Console()
 
@@ -156,17 +156,22 @@ def run_loop(config: AppConfig, once: bool = False, confirm_autopick_submit: boo
             if not confirm_autopick_submit:
                 console.print(
                     f"[yellow]\\[DRY RUN][/] Autopick would submit [bold]{player_name}[/] now "
-                    f"({decision.reason}). Pass --confirm-autopick-submit to allow real submission "
-                    "once submit_pick is implemented."
+                    f"({decision.reason}). Pass --confirm-autopick-submit to allow real submission."
                 )
             else:
+                round_number, pos_in_round = round_and_pos_in_round(overall_pick_number, config.num_teams)
                 try:
-                    client.submit_pick(decision.player.player.draftable_player_id, my_team_id)
+                    client.submit_pick(
+                        fantasy_team_id=my_team_id,
+                        draftable_player_id=decision.player.player.draftable_player_id,
+                        round_number=round_number,
+                        pos_in_round=pos_in_round,
+                    )
                     console.print(f"[bold red]AUTO-PICKED[/] {player_name} ({decision.reason})")
-                except NotImplementedError as exc:
+                except (ClickyDraftAPIError, ClickyDraftAuthError) as exc:
                     console.print(
-                        f"[yellow]\\[DRY RUN][/] Autopick would submit [bold]{player_name}[/] now "
-                        f"({decision.reason}) but submit_pick isn't implemented yet: {exc}"
+                        f"[bold red]AUTOPICK SUBMISSION FAILED[/] for {player_name}: {exc}. "
+                        "Pick Bradley's slot manually in ClickyDraft now — do not assume it went through."
                     )
 
         screen = render_screen(

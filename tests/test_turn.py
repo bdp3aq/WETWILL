@@ -1,6 +1,6 @@
 import unittest
 
-from clickydraft_assistant.turn import current_overall_pick_number, infer_draft_order
+from clickydraft_assistant.turn import current_overall_pick_number, infer_draft_order, round_and_pos_in_round
 from clickydraft_assistant.models import Pick
 
 
@@ -51,6 +51,22 @@ class TestCurrentOverallPickNumber(unittest.TestCase):
     def test_next_pick_number(self):
         self.assertEqual(current_overall_pick_number(0), 1)
         self.assertEqual(current_overall_pick_number(5), 6)
+
+
+class TestRoundAndPosInRound(unittest.TestCase):
+    def test_first_pick_of_draft(self):
+        self.assertEqual(round_and_pos_in_round(1, num_teams=14), (1, 1))
+
+    def test_last_pick_of_round_one(self):
+        self.assertEqual(round_and_pos_in_round(14, num_teams=14), (1, 14))
+
+    def test_first_pick_of_round_two(self):
+        self.assertEqual(round_and_pos_in_round(15, num_teams=14), (2, 1))
+
+    def test_matches_captured_real_example(self):
+        # Captured from a real submitted pick: round 8, posInRound 7, 14 teams.
+        overall = (8 - 1) * 14 + 7  # 105th overall pick
+        self.assertEqual(round_and_pos_in_round(overall, num_teams=14), (8, 7))
 
 
 if __name__ == "__main__":

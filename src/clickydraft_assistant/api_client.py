@@ -8,8 +8,11 @@ Request Headers -> Cookie). Pass it via the `CLICKYDRAFT_COOKIE` env var
 (see config.py) or the `cookie` constructor argument. Treat that value as
 a live credential — never log it, write it to a file, or commit it.
 
-`submit_pick` below is a deliberate stub, not a real write call — see its
-docstring before touching it.
+`submit_pick` is a real write call, confirmed against a request captured
+from Bradley's own live draft session (see its docstring) — it is not a
+guess. It still only ever gets called from the opt-in autopick safety net
+(autopick.py), which stays gated behind config + a CLI flag + a confirmed
+timer reading.
 """
 
 from __future__ import annotations
@@ -87,34 +90,77 @@ class ClickyDraftClient:
             f"/leagues/{self.league_id}/league-instances/{self.league_instance_id}/draftable-players"
         )
 
-    def submit_pick(self, draftable_player_id: int, fantasy_team_id: int) -> dict:
+    def submit_pick(
+        self,
+        fantasy_team_id: int,
+        draftable_player_id: int,
+        round_number: int,
+        pos_in_round: int,
+        keeper: bool = False,
+        auto_drafted: bool = False,
+    ) -> dict:
         """Submit a real draft pick. USED ONLY by the opt-in autopick safety
         net (autopick.py), and only ever as a last resort when Bradley hasn't
         picked himself and his clock is about to expire — see that module's
         docstring for the full safety gating.
 
-        This is intentionally unimplemented: the three GET endpoints in
-        API_NOTES.md were all captured by observing Bradley's own browser
-        traffic, but no one has captured the request ClickyDraft's UI sends
-        when a pick is *submitted* (method, path, body shape are all
-        unknown). Guessing at a write endpoint and firing it against a real,
-        consequential keeper-league draft is exactly the kind of mistake
-        this tool exists to avoid.
+        Confirmed against a request captured from Bradley's own live draft
+        session (a real successful pick, round 8 posInRound 7) — this is not
+        a guess:
 
-        To implement this for real:
-          1. During a real or practice draft, open DevTools -> Network,
-             make a pick through the ClickyDraft UI, and find the request
-             it fires (likely a POST/PUT to something under
-             `/leagues/{leagueId}/league-instances/{leagueInstanceId}/picks`).
-          2. Capture its method, full URL, and request body shape.
-          3. Replace this method's body with the real `self._session.post(...)`
-             (or put/patch) call, keeping the same auth/retry pattern as `_get`.
-          4. Test it against a low-stakes situation first if at all possible
-             (e.g. a spare late-round bench slot) before trusting it in a
-             pick that matters.
+            POST {base_url}/leagues/{leagueId}/league-instances/{leagueInstanceId}/picks/
+            Content-Type: application/json
+            X-Requested-With: XMLHttpRequest
+            {
+              "leagueId": ..., "leagueInstanceId": ...,
+              "fantasyTeamId": ..., "draftablePlayerId": ...,
+              "round": ..., "posInRound": ...,
+              "keeper": false, "autoDrafted": false,
+              "id": null, "value": null, "skipped": null
+            }
+
+        `round`/`pos_in_round` are NOT inferred here — pass them from
+        `turn.round_and_pos_in_round(overall_pick_number, num_teams)` so the
+        caller's own turn-tracking is the single source of truth for "which
+        slot is this." `auto_drafted` defaults to False because this mirrors
+        a normal manual pick (a specific, deliberately chosen player) just
+        submitted by the tool instead of a browser click — not ClickyDraft's
+        own random autopick.
+
+        Deliberately does NOT retry on failure (unlike `_get`): retrying a
+        write call risks submitting the same pick twice if the first attempt
+        actually succeeded server-side but the response was lost. A failure
+        here should be surfaced to Bradley immediately, not silently retried.
         """
-        raise NotImplementedError(
-            "submit_pick is a stub — the real ClickyDraft pick-submission endpoint hasn't "
-            "been captured yet. See this method's docstring for how to capture and wire it up. "
-            "Until then the autopick safety net can only run in dry-run mode."
-        )
+        url = f"{self.base_url}/leagues/{self.league_id}/league-instances/{self.league_instance_id}/picks/"
+        body = {
+            "leagueId": self.league_id,
+            "leagueInstanceId": self.league_instance_id,
+            "fantasyTeamId": fantasy_team_id,
+            "draftablePlayerId": draftable_player_id,
+            "round": round_number,
+            "posInRound": pos_in_round,
+            "keeper": keeper,
+            "autoDrafted": auto_drafted,
+            "id": None,
+            "value": None,
+            "skipped": None,
+        }
+        try:
+            response = self._session.post(
+                url,
+                json=body,
+                headers={"X-Requested-With": "XMLHttpRequest"},
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            raise ClickyDraftAPIError(f"Failed to POST {url}: {exc}") from exc
+
+        if response.status_code in (401, 403):
+            raise ClickyDraftAuthError(
+                f"{response.status_code} from {url} — the CLICKYDRAFT_COOKIE is likely "
+                "missing or expired. Re-capture it from DevTools -> Network."
+            )
+        if not response.ok:
+            raise ClickyDraftAPIError(f"{response.status_code} from {url}: {response.text[:500]}")
+        return response.json()

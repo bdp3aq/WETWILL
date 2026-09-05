@@ -192,6 +192,38 @@ if (jsonItem.draftablePlayerId && jsonItem.posInRound && !jsonItem.deleteAction 
 
 **Recommendation: skip the websocket.** Polling the Picks endpoint every 1–2 seconds is simpler and avoids dropped-connection handling, cross-domain certificate issues, and the extra parsing logic needed to separate real picks from chat/timer/deletion noise on the stream.
 
+### 5. Submit Pick (write) — used only by the autopick safety net
+
+```
+POST https://clickydraft.com/draftapp/leagues/{leagueId}/league-instances/{leagueInstanceId}/picks/
+Content-Type: application/json
+X-Requested-With: XMLHttpRequest
+```
+
+Confirmed against a real request captured from Bradley's own live draft session (a successful pick — round 8, posInRound 7). Body:
+
+```json
+{
+  "leagueId": 305751,
+  "leagueInstanceId": 305775,
+  "fantasyTeamId": 3322760,
+  "draftablePlayerId": 70347,
+  "round": 8,
+  "posInRound": 7,
+  "keeper": false,
+  "autoDrafted": false,
+  "id": null,
+  "value": null,
+  "skipped": null
+}
+```
+
+Notable:
+- Note the **trailing slash** on the URL — matches the GET `/picks` path plus `/`.
+- `round`/`posInRound` are supplied by the client, not inferred server-side — the caller has to know which slot it's filling. See `turn.py`'s `round_and_pos_in_round` (pure sequential position within the round, not snake-mirrored).
+- `id`, `value`, `skipped` are sent as `null` — presumably filled in / echoed back by the server on success.
+- This is a **write** endpoint. It's wired into `api_client.py`'s `submit_pick`, used exclusively by the opt-in autopick safety net (see scope amendment at the top of this doc) — never call it outside that gated path.
+
 ## What the tool needs to do
 
 1. On startup (before the live draft begins): pull League Settings once (teams, roster rules) and the full Draftable Players list, then pull Picks once to read the **preloaded keeper picks** (`keeper: true`) — remove those players from the available pool and credit them against each team's roster needs immediately, so the starting state is accurate.
@@ -207,8 +239,8 @@ if (jsonItem.draftablePlayerId && jsonItem.posInRound && !jsonItem.deleteAction 
 - Confirm the preloaded-keeper picks are visible via the Picks endpoint before the draft officially opens (vs. only appearing once the draft starts) — matters for step 1 above. Still open.
 - There are other calls beyond the four above that exist on the API; if a specific piece of data is needed later, it can likely be found via the Network tab or by asking directly.
 - **Player projections** — the sample `draftablePlayer.projectedStats` field is `null`. The scoring engine needs per-player projected raw stats (completions, yards, TDs, etc.) to turn into fantasy points via the league's custom point values. If ClickyDraft doesn't populate `projectedStats` for this league, an external projections source (CSV import) is required — see `README.md`.
-- **[New, for the autopick safety net only] Pick-submission endpoint** — none of the four calls above are a write endpoint. The autopick safety net (see scope amendment) needs to know the method/URL/body ClickyDraft's own UI uses to submit a pick. Nobody has captured this yet — see `src/clickydraft_assistant/api_client.py`'s `submit_pick` docstring for exactly what to capture. Until it's captured, `submit_pick` is a stub that always raises, so the safety net can only ever run in dry-run mode.
-- **[New, for the autopick safety net only] "Seconds remaining on the clock" source** — the sample Pick object's `draftTimer` field is `null` on a completed pick; its meaning (if any) for an in-progress turn is unconfirmed, and might only live on the websocket stream this project otherwise avoids. See `src/clickydraft_assistant/draft_timer.py` — it's currently a stub that always returns `None`, which by design keeps the autopick safety net from ever firing until this is resolved.
+- **[Autopick safety net] Pick-submission endpoint** — ~~none of the four calls above are a write endpoint~~ **confirmed** — see "5. Submit Pick (write)" below. `api_client.py`'s `submit_pick` is now a real implementation, not a stub.
+- **[Autopick safety net, still open] "Seconds remaining on the clock" source** — the sample Pick object's `draftTimer` field is `null` on a completed pick; its meaning (if any) for an in-progress turn is unconfirmed, and might only live on the websocket stream this project otherwise avoids. See `src/clickydraft_assistant/draft_timer.py` — it's currently a stub that always returns `None`, which by design keeps the autopick safety net from ever firing until this is resolved. **This is now the only remaining blocker** for the autopick safety net to be able to fire for real (submission itself is confirmed and implemented).
 
 ## Next steps
 

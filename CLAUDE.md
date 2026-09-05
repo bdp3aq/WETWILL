@@ -36,8 +36,9 @@ the scope-amendment note at the top.
   net's decision logic (`evaluate_autopick`). Read its module docstring
   in full before changing anything here.
 - `src/clickydraft_assistant/api_client.py` — cookie-auth HTTP client for
-  the three ClickyDraft REST endpoints, plus a `submit_pick` stub that
-  always raises `NotImplementedError` until the real endpoint is captured.
+  the three ClickyDraft REST endpoints, plus `submit_pick` — a real write
+  call confirmed against a captured live request (see API_NOTES.md "5.
+  Submit Pick"), used only by the autopick safety net.
 - `src/clickydraft_assistant/cli.py` / `display.py` — polling loop + rich
   console output; wires the autopick decision into the loop with a
   `--confirm-autopick-submit` double-opt-in flag.
@@ -58,17 +59,20 @@ the scope-amendment note at the top.
   the double opt-in or the safety conditions in `evaluate_autopick`.
   Anything else that calls a ClickyDraft write endpoint needs the same
   explicit user sign-off this feature got before being added.
-- Never make `submit_pick` or `read_seconds_remaining` "just work" with a
-  guessed endpoint/field — both are deliberately unimplemented stubs
-  until someone captures the real ones from a live session (see their
-  docstrings). Guessing at a write endpoint against a real, consequential
-  keeper-league draft is exactly the failure mode these stubs prevent.
+- Never make `read_seconds_remaining` "just work" with a guessed field —
+  it's deliberately an unimplemented stub until someone captures the real
+  timer source from a live session (see its docstring). `submit_pick` is
+  now implemented for real (confirmed against a captured live request),
+  but the same rule applied to it while it was still a stub, and applies
+  to any *other* guessed write endpoint someone might be tempted to add.
+  Guessing at a write endpoint against a real, consequential keeper-league
+  draft is exactly the failure mode this rule prevents.
 - Scoring values are data (`ScoringSettings` fields), not magic numbers
   scattered through code — if the league's settings change, they should
   only need to change in one place.
 - Treat any ClickyDraft session cookie as a live credential: never log
   it, write it to a file, or commit it — env var only (`CLICKYDRAFT_COOKIE`).
 - See README.md's "Known limitations" for unresolved items (real
-  roster-construction field names, keeper-preload timing, the two
-  autopick stubs) before assuming the API integration is fully verified
-  against a live ClickyDraft session — it hasn't been for those items.
+  roster-construction field names, keeper-preload timing, the timer stub)
+  before assuming the API integration is fully verified against a live
+  ClickyDraft session — it hasn't been for those items.

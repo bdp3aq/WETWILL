@@ -58,3 +58,16 @@ def current_overall_pick_number(real_pick_count: int) -> int:
     """The pick number that's now on the clock, given how many real picks
     have already landed."""
     return real_pick_count + 1
+
+
+def round_and_pos_in_round(overall_pick_number: int, num_teams: int) -> tuple[int, int]:
+    """1-indexed (round, posInRound) for a given overall pick number, matching
+    the field values ClickyDraft itself sends on pick submission (confirmed
+    via a captured real request — see API_NOTES.md "Pick submission").
+    `posInRound` is the plain sequential slot within the round (1..num_teams),
+    not snake-mirrored — e.g. round 8, posInRound 7 is the 7th pick made in
+    round 8, regardless of which physical draft-order seat that team sits in.
+    """
+    round_index = (overall_pick_number - 1) // num_teams  # 0-based
+    pos_in_round = (overall_pick_number - 1) % num_teams  # 0-based
+    return round_index + 1, pos_in_round + 1
