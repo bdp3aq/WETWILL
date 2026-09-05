@@ -1,0 +1,27 @@
+# Copy to config.yaml and fill in. See README.md for how to get each value.
+
+league_id: 305751
+league_instance_id: 305775
+
+# Bradley's fantasyTeamId within this ClickyDraft league instance. Leave
+# blank and pass --team-name on the CLI the first time to resolve it from
+# the League Settings response instead.
+my_team_id:
+my_team_name: null
+
+# Wet Willie Brigade: 14 teams.
+num_teams: 14
+
+# How often to poll the Picks endpoint during a live draft.
+poll_interval_seconds: 1.5
+
+# Path to a CSV of raw per-player stat projections (see data/projections.example.csv).
+# Only needed if ClickyDraft's own draftablePlayer.projectedStats field is empty
+# for this league instance, which is the case in the one sample response we have.
+projections_csv: data/projections.csv
+
+# Env var holding the raw browser `Cookie` header value (see README.md "Auth").
+cookie_env_var: CLICKYDRAFT_COOKIE
+
+# How many recommendations to show at once.
+top_n: 15

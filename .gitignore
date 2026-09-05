@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Local, personal, or real projection data — don't commit these.
+config.yaml
+data/projections.csv
+.env
