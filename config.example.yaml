@@ -34,11 +34,13 @@ top_n: 15
 
 # Opt-in autopick SAFETY NET — off by default. See README.md "Autopick
 # safety net" before turning this on. It only ever submits a pick as a
-# last resort when Bradley hasn't picked himself and his own clock is
-# about to run out, and only once the real submit-pick endpoint has been
-# captured and wired into api_client.py (it's a stub until then, so
-# enabling this currently just logs what it WOULD have picked).
+# last resort when Bradley hasn't picked himself for a while on his own
+# turn. There's no ClickyDraft countdown timer to key off of (confirmed
+# there isn't one exposed via polling), so this is measured by the tool's
+# own wall clock instead: how long IT has observed Bradley's turn sitting
+# idle. That means the tool needs to be running continuously through the
+# draft for this to mean what it says — see turn_clock.py.
 autopick:
   enabled: false
-  # How many seconds left on Bradley's own pick clock before it fires.
-  trigger_seconds_remaining: 10
+  # Seconds of idle time on Bradley's own turn before it fires (3 minutes).
+  wait_seconds: 180

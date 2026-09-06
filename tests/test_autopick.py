@@ -29,8 +29,8 @@ class TestEvaluateAutopick(unittest.TestCase):
             my_team_id=10,
             draft_order=self.order,
             overall_pick_number=1,
-            seconds_remaining=5.0,
-            trigger_seconds_remaining=10.0,
+            elapsed_seconds_on_turn=200.0,
+            wait_seconds=180.0,
             top_available=self.top,
             enabled=True,
         )
@@ -53,22 +53,26 @@ class TestEvaluateAutopick(unittest.TestCase):
         decision = self._evaluate(overall_pick_number=2)  # team 20's slot
         self.assertFalse(decision.should_fire)
 
-    def test_unknown_timer_never_fires(self):
-        decision = self._evaluate(seconds_remaining=None)
+    def test_just_became_my_turn_does_not_fire_immediately(self):
+        decision = self._evaluate(elapsed_seconds_on_turn=0.0)
         self.assertFalse(decision.should_fire)
 
-    def test_plenty_of_time_does_not_fire(self):
-        decision = self._evaluate(seconds_remaining=30.0, trigger_seconds_remaining=10.0)
+    def test_not_enough_idle_time_yet_does_not_fire(self):
+        decision = self._evaluate(elapsed_seconds_on_turn=90.0, wait_seconds=180.0)
         self.assertFalse(decision.should_fire)
 
     def test_no_real_projection_available_never_fires(self):
         decision = self._evaluate(top_available=[ranked(1, has_projection=False)])
         self.assertFalse(decision.should_fire)
 
-    def test_fires_when_all_conditions_met(self):
-        decision = self._evaluate(seconds_remaining=3.0, trigger_seconds_remaining=10.0)
+    def test_fires_once_idle_threshold_reached(self):
+        decision = self._evaluate(elapsed_seconds_on_turn=180.0, wait_seconds=180.0)
         self.assertTrue(decision.should_fire)
         self.assertEqual(decision.player.player.draftable_player_id, 1)
+
+    def test_fires_when_well_past_threshold(self):
+        decision = self._evaluate(elapsed_seconds_on_turn=300.0, wait_seconds=180.0)
+        self.assertTrue(decision.should_fire)
 
     def test_skips_fallback_only_players_for_top_pick(self):
         # Best-scored entry has no real projection; only the second one does.

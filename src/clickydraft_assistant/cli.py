@@ -22,7 +22,6 @@ from .api_client import ClickyDraftAPIError, ClickyDraftAuthError, ClickyDraftCl
 from .autopick import evaluate_autopick
 from .config import AppConfig
 from .display import render_screen
-from .draft_timer import read_seconds_remaining
 from .fallback_rankings import XlsxAdpFallback
 from .models import Pick, Player, Team
 from .projections import CSVProjectionSource, ProjectionLookup
@@ -30,6 +29,7 @@ from .ranking import rank_available_players
 from .roster import compute_roster_needs
 from .state import DraftState
 from .turn import current_overall_pick_number, infer_draft_order, round_and_pos_in_round
+from .turn_clock import TurnClock
 
 console = Console()
 
@@ -73,7 +73,7 @@ def run_loop(config: AppConfig, once: bool = False, confirm_autopick_submit: boo
     )
 
     try:
-        state, teams, initial_settings = build_state(client)
+        state, teams, _initial_settings = build_state(client)
     except ClickyDraftAuthError as exc:
         console.print(f"[red]Auth error:[/] {exc}")
         sys.exit(1)
@@ -111,14 +111,18 @@ def run_loop(config: AppConfig, once: bool = False, confirm_autopick_submit: boo
 
     if config.autopick.enabled:
         console.print(
-            f"[bold yellow]Autopick safety net ARMED[/] (trigger: "
-            f"{config.autopick.trigger_seconds_remaining:.0f}s remaining on Bradley's clock). "
+            f"[bold yellow]Autopick safety net ARMED[/] (fires after "
+            f"{config.autopick.wait_seconds:.0f}s idle on Bradley's own turn — measured by this "
+            f"tool's own uptime, keep it running continuously through the draft). "
             f"{'Submission is CONFIRMED — it will actually pick if it fires.' if confirm_autopick_submit else 'Dry-run only (pass --confirm-autopick-submit to allow real submission).'}"
         )
 
     recent_events: deque = deque(maxlen=50)
+    turn_clock = TurnClock()
+    already_attempted_pick_number: int | None = None
 
     def poll_once() -> None:
+        nonlocal already_attempted_pick_number
         picks_raw = client.get_picks()
         picks = [Pick.from_api(p) for p in picks_raw]
         events = state.update(picks)
@@ -141,17 +145,25 @@ def run_loop(config: AppConfig, once: bool = False, confirm_autopick_submit: boo
         real_picks_sorted = sorted((p for p in picks if p.is_real_pick), key=lambda p: p.id)
         draft_order = infer_draft_order(real_picks_sorted, config.num_teams)
         overall_pick_number = current_overall_pick_number(len(real_picks_sorted))
-        seconds_remaining = read_seconds_remaining(picks_raw, initial_settings)
+        elapsed_seconds_on_turn = turn_clock.elapsed_seconds(overall_pick_number)
         decision = evaluate_autopick(
             my_team_id=my_team_id,
             draft_order=draft_order,
             overall_pick_number=overall_pick_number,
-            seconds_remaining=seconds_remaining,
-            trigger_seconds_remaining=config.autopick.trigger_seconds_remaining,
+            elapsed_seconds_on_turn=elapsed_seconds_on_turn,
+            wait_seconds=config.autopick.wait_seconds,
             top_available=ranked,
             enabled=config.autopick.enabled,
         )
-        if decision.should_fire:
+        if decision.should_fire and overall_pick_number == already_attempted_pick_number:
+            pass  # already attempted this exact slot -- never retry automatically (see below)
+        elif decision.should_fire:
+            # Mark this slot attempted BEFORE calling out, and never again for this slot even
+            # on failure: a lagging get_picks() response after a successful submit must not
+            # cause a second, duplicate pick, and a failed submission should not auto-retry
+            # (retrying a write call risks a double-submit if the first actually landed) --
+            # the failure message below tells Bradley to act manually instead.
+            already_attempted_pick_number = overall_pick_number
             player_name = decision.player.player.full_name
             if not confirm_autopick_submit:
                 console.print(

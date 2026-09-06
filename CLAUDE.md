@@ -28,10 +28,13 @@ the scope-amendment note at the top.
   ordering (from `data/Top-144 Player Rankings.xlsx`) for players with no
   stat-based projection only — must never outrank a real projection.
 - `src/clickydraft_assistant/turn.py` — infers whose turn it is from
-  observed pick history (snake order), used only by the autopick safety net.
-- `src/clickydraft_assistant/draft_timer.py` — stub for reading seconds
-  remaining on the current pick clock; always returns `None` until the
-  real timer source is confirmed (see API_NOTES.md open items).
+  observed pick history (snake order), plus `round_and_pos_in_round` for
+  the fields `submit_pick` needs. Used only by the autopick safety net.
+- `src/clickydraft_assistant/turn_clock.py` — `TurnClock`: wall-clock idle
+  time on the current turn, since ClickyDraft doesn't expose a
+  discoverable countdown timer (confirmed via
+  `scripts/watch_for_timer_field.py`). This is what the autopick safety
+  net's wait threshold is measured against instead.
 - `src/clickydraft_assistant/autopick.py` — the opt-in autopick safety
   net's decision logic (`evaluate_autopick`). Read its module docstring
   in full before changing anything here.
@@ -53,26 +56,33 @@ the scope-amendment note at the top.
   Bradley explicitly requested: it may submit his own top recommendation,
   but ONLY as an opt-in last resort (off by default, and gated behind
   both `config.yaml`'s `autopick.enabled` AND the `--confirm-autopick-submit`
-  CLI flag) when he hasn't picked himself and his clock is about to
-  expire. Do not build anything beyond that narrow scope — no drafting
-  for other teams, no "just autopick the whole draft" mode, no removing
-  the double opt-in or the safety conditions in `evaluate_autopick`.
-  Anything else that calls a ClickyDraft write endpoint needs the same
-  explicit user sign-off this feature got before being added.
-- Never make `read_seconds_remaining` "just work" with a guessed field —
-  it's deliberately an unimplemented stub until someone captures the real
-  timer source from a live session (see its docstring). `submit_pick` is
-  now implemented for real (confirmed against a captured live request),
-  but the same rule applied to it while it was still a stub, and applies
-  to any *other* guessed write endpoint someone might be tempted to add.
-  Guessing at a write endpoint against a real, consequential keeper-league
-  draft is exactly the failure mode this rule prevents.
+  CLI flag) when he hasn't picked himself for a while on his own turn.
+  Do not build anything beyond that narrow scope — no drafting for other
+  teams, no "just autopick the whole draft" mode, no removing the double
+  opt-in, the one-fire-per-slot guard in `cli.py`, or the safety
+  conditions in `evaluate_autopick`. Anything else that calls a
+  ClickyDraft write endpoint needs the same explicit user sign-off this
+  feature got before being added.
+- Both prerequisites for the autopick safety net are resolved:
+  `submit_pick` (api_client.py) is a real implementation confirmed against
+  a captured live request, and the trigger mechanism is wall-clock idle
+  time (`turn_clock.py`) since ClickyDraft doesn't expose a discoverable
+  timer. If a future change needs another guessed write endpoint or
+  unconfirmed field, apply the same standard those two met: capture and
+  confirm it against a real live session first — never guess at a write
+  endpoint against a real, consequential keeper-league draft.
+- Never remove the `already_attempted_pick_number` guard in `cli.py`'s
+  poll loop, and never make the autopick path retry a failed
+  `submit_pick` automatically — a lagging `get_picks()` response after a
+  successful submit, or a naive retry after a failure, both risk a
+  duplicate real pick. A failed submission must surface loudly and stop,
+  not retry or fail silently.
 - Scoring values are data (`ScoringSettings` fields), not magic numbers
   scattered through code — if the league's settings change, they should
   only need to change in one place.
 - Treat any ClickyDraft session cookie as a live credential: never log
   it, write it to a file, or commit it — env var only (`CLICKYDRAFT_COOKIE`).
 - See README.md's "Known limitations" for unresolved items (real
-  roster-construction field names, keeper-preload timing, the timer stub)
-  before assuming the API integration is fully verified against a live
-  ClickyDraft session — it hasn't been for those items.
+  roster-construction field names, keeper-preload timing) before assuming
+  the API integration is fully verified against a live ClickyDraft
+  session — it hasn't been for those items.

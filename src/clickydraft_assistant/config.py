@@ -13,17 +13,22 @@ import yaml
 class AutopickConfig:
     """See autopick.py for the full safety gating this config feeds into.
     Off by default — this is an opt-in safety net, never full auto-draft.
+
+    `wait_seconds`: how long this tool must observe Bradley's own turn
+    sitting idle (no pick from him) before firing — measured by the tool's
+    own wall clock (turn_clock.py), since ClickyDraft doesn't expose a
+    discoverable countdown timer to poll instead.
     """
 
     enabled: bool = False
-    trigger_seconds_remaining: float = 10.0
+    wait_seconds: float = 180.0
 
     @classmethod
     def from_raw(cls, raw: dict | None) -> "AutopickConfig":
         raw = raw or {}
         return cls(
             enabled=bool(raw.get("enabled", False)),
-            trigger_seconds_remaining=float(raw.get("trigger_seconds_remaining", 10.0)),
+            wait_seconds=float(raw.get("wait_seconds", 180.0)),
         )
 
 

@@ -10,8 +10,8 @@ positional roster needs.
 ClickyDraft and prints recommendations to the console; picks are made by
 Bradley, by hand, in the ClickyDraft UI. There's one narrow, **opt-in**
 exception: an autopick safety net that can submit a pick as a last resort
-if Bradley hasn't picked himself and his clock is about to expire. It's
-off by default and requires deliberate, double opt-in to activate — see
+if Bradley hasn't picked himself for a while on his own turn. It's off
+by default and requires deliberate, double opt-in to activate — see
 **Autopick safety net** below before touching it.
 
 See `API_NOTES.md` for the full API/spec write-up this was built from.
@@ -39,16 +39,27 @@ See `API_NOTES.md` for the full API/spec write-up this was built from.
      slot than for only the flex spot).
 4. Render a live top-N recommendation table plus a recent-picks feed.
 
-## Autopick safety net (opt-in, off by default)
+## Autopick safety net (opt-in, off by default, capable of firing for real)
 
 This tool's core purpose is recommendation-only — see `API_NOTES.md`'s
 original spec. One narrow addition was made on top of that: an **opt-in
 safety net** that can submit Bradley's own top recommendation as a last
-resort, but only if he hasn't picked himself and his own clock is about
-to run out. The point isn't to draft *for* him — it's so that a missed
-slot (stepped away, lost connection, timer surprise) goes to this tool's
-custom-scoring pick instead of to ClickyDraft's own generic autopick,
-which knows nothing about this league's scoring.
+resort, but only if he hasn't picked himself for a while on his own turn.
+The point isn't to draft *for* him — it's so that an idle/missed slot
+(stepped away, lost connection) goes to this tool's custom-scoring pick
+instead of to ClickyDraft's own generic autopick, which knows nothing
+about this league's scoring.
+
+There's no discoverable ClickyDraft countdown timer to key off (confirmed
+via `scripts/watch_for_timer_field.py` — nothing changed across League
+Settings or Picks while polling during a real turn). So instead of
+"seconds left on ClickyDraft's own clock," the trigger is wall-clock idle
+time **this tool itself** has observed on Bradley's turn — see
+`turn_clock.py`. That means **the tool needs to be running continuously
+through the draft** for the wait threshold to mean what it says; if it's
+started (or restarted) partway through Bradley's turn, the clock
+(safely) restarts from zero at that moment rather than assuming time has
+already passed.
 
 **It is off by default**, and firing requires ALL of the following —
 see `src/clickydraft_assistant/autopick.py` for the exact logic:
@@ -60,12 +71,8 @@ see `src/clickydraft_assistant/autopick.py` for the exact logic:
    round-1 slot until every team's round-1 pick has landed — so the
    safety net is inert for the entire first round and only becomes
    active from round 2 onward. This is intentional caution, not a bug.
-3. A *confirmed* reading of seconds remaining on Bradley's clock, at or
-   below `autopick.trigger_seconds_remaining` (default 10s). **This isn't
-   wired up yet** — see "What's still missing" below. Until it is,
-   `draft_timer.py` always reports "unknown," and by design an unknown
-   timer state means the safety net never fires (an unknown state is
-   treated as "don't act," not "assume it's urgent").
+3. This tool has observed his turn sitting idle (no pick from him) for
+   at least `autopick.wait_seconds` (default 180s / 3 minutes).
 4. A genuine top recommendation exists with a real stat-based projection
    (never falls back to an ADP-only-ranked player, never submits nothing).
 5. **Double opt-in for real submission:** even when all of the above
@@ -73,29 +80,21 @@ see `src/clickydraft_assistant/autopick.py` for the exact logic:
    `--confirm-autopick-submit` on the command line every time you run the
    tool. Without it, an armed decision only ever logs `[DRY RUN] Autopick
    would submit <player> now` — nothing is sent to ClickyDraft.
+6. **Fires at most once per pick slot**, whether the submission succeeds
+   or fails — it never auto-retries (a lagging `get_picks()` response
+   right after a successful submit, or a failed attempt, must never
+   cause a duplicate pick). A failed submission is surfaced loudly in the
+   console telling Bradley to pick that slot manually — it never fails
+   silently or assumes success.
 
-### What's still missing before this can submit anything for real
-
-- **The pick-submission request is confirmed and implemented** — captured
-  from a real successful pick in Bradley's own draft
-  (`POST .../picks/`, see `API_NOTES.md` "5. Submit Pick"). `api_client.py`'s
-  `submit_pick` sends the real request now, not a stub.
-- **Where "seconds remaining" actually lives is still unconfirmed.**
-  `draft_timer.py`'s `read_seconds_remaining` always returns `None` today.
-  Use `scripts/watch_for_timer_field.py` during Bradley's own turn to spot
-  it automatically (it diffs consecutive polls and prints whatever
-  changes) — if nothing changes there while his clock visibly counts
-  down, it likely only lives on the websocket stream this project
-  otherwise intentionally skips, which would need a browser-based
-  capture instead (DevTools → Network → filter to `WS` → Messages tab).
-
-**This is now the only remaining blocker.** Once it's resolved, enabling
-`autopick.enabled` + `--confirm-autopick-submit` will make the safety net
-capable of actually submitting a pick — test that combination carefully
-(e.g. on a late, low-stakes bench slot) before trusting it on a pick that
-matters. Until then, enabling `autopick.enabled` is safe to leave on if
-you want — condition 3 above will never be met, so it will only ever
-print dry-run log lines, never act.
+The pick-submission request itself is confirmed and implemented —
+captured from a real successful pick in Bradley's own draft
+(`POST .../picks/`, see `API_NOTES.md` "5. Submit Pick"). Both
+prerequisites (submission + trigger mechanism) are now resolved, so
+enabling `autopick.enabled` + `--confirm-autopick-submit` makes the
+safety net **capable of actually submitting a pick**. Test that
+combination carefully — e.g. on a late, low-stakes bench slot — before
+trusting it on a pick that matters.
 
 ## Setup
 
@@ -204,9 +203,11 @@ points-allowed tiers), keeper ingestion, pick diffing (including
 ranking/VOR logic, the ADP fallback ordering (including that it never
 outranks a real projection), snake-order turn inference (including the
 round/posInRound math that matches the real captured submission
-request), the autopick safety net's decision logic (including all the
-conditions that must hold before it fires), and `submit_pick`'s request
-shape (mocked HTTP — no real network calls in tests).
+request), the wall-clock turn timer, the autopick safety net's decision
+logic (including all the conditions that must hold before it fires),
+`submit_pick`'s request shape (mocked HTTP — no real network calls in
+tests), and an end-to-end regression test confirming the safety net
+fires at most once per pick slot even across many polls.
 
 ## Known limitations / open items
 
@@ -223,10 +224,13 @@ Carried over from `API_NOTES.md`, still unresolved:
 - **Player projections**: no projections source is wired up beyond the
   CSV fallback — `data/projections.csv` needs to be populated with real
   season projections before a live draft (see above).
-- **Autopick safety net is still dry-run only** — the pick-submission
-  endpoint is now confirmed and implemented, but the "seconds remaining"
-  timer source is still an unconfirmed stub, which by design keeps the
-  safety net from ever firing for real. See "Autopick safety net" above.
+- **Autopick safety net is now capable of firing for real** — both the
+  pick-submission endpoint and the trigger mechanism (wall-clock idle
+  time, since no ClickyDraft timer is exposed) are implemented. It's
+  still off by default and needs `autopick.enabled` +
+  `--confirm-autopick-submit`. See "Autopick safety net" above, including
+  the requirement to keep the tool running continuously through the
+  draft for the idle-time trigger to be meaningful.
 - The websocket stream (`wss://stream1.clickydraft.com/ws/{leagueInstanceId}`)
   is intentionally not used, per the recommendation in `API_NOTES.md` —
   polling is simpler and avoids reconnect/parsing complexity.

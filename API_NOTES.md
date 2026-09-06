@@ -6,13 +6,20 @@ Seed document for the Claude Code build. Starting context for this project.
 > strictly recommendation-only, no auto-draft. Bradley later explicitly
 > requested one narrow addition: an **opt-in autopick safety net** — off
 > by default — that can submit his own top recommendation as a last
-> resort if he hasn't picked himself and his clock is about to expire, so
-> a missed slot goes to this tool's custom-scoring pick instead of to
+> resort if he hasn't picked himself for a while on his own turn, so an
+> idle/missed slot goes to this tool's custom-scoring pick instead of to
 > ClickyDraft's own generic autopick. It is NOT full auto-draft: manual
 > picking stays the default and primary mode. See `README.md` "Autopick
 > safety net" and `src/clickydraft_assistant/autopick.py` for the exact
 > scope and safety gating. The rest of this document is the original,
 > unmodified spec.
+>
+> **Trigger mechanism note:** the original plan was to key off a
+> ClickyDraft-provided countdown timer, but polling confirmed there isn't
+> a discoverable one exposed via the REST endpoints (see the timer open
+> item below). Instead the trigger is wall-clock idle time the tool
+> itself observes on Bradley's turn (default 3 minutes) — see
+> `src/clickydraft_assistant/turn_clock.py`.
 
 ## Goal
 
@@ -240,7 +247,7 @@ Notable:
 - There are other calls beyond the four above that exist on the API; if a specific piece of data is needed later, it can likely be found via the Network tab or by asking directly.
 - **Player projections** — the sample `draftablePlayer.projectedStats` field is `null`. The scoring engine needs per-player projected raw stats (completions, yards, TDs, etc.) to turn into fantasy points via the league's custom point values. If ClickyDraft doesn't populate `projectedStats` for this league, an external projections source (CSV import) is required — see `README.md`.
 - **[Autopick safety net] Pick-submission endpoint** — ~~none of the four calls above are a write endpoint~~ **confirmed** — see "5. Submit Pick (write)" below. `api_client.py`'s `submit_pick` is now a real implementation, not a stub.
-- **[Autopick safety net, still open] "Seconds remaining on the clock" source** — the sample Pick object's `draftTimer` field is `null` on a completed pick; its meaning (if any) for an in-progress turn is unconfirmed, and might only live on the websocket stream this project otherwise avoids. See `src/clickydraft_assistant/draft_timer.py` — it's currently a stub that always returns `None`, which by design keeps the autopick safety net from ever firing until this is resolved. **This is now the only remaining blocker** for the autopick safety net to be able to fire for real (submission itself is confirmed and implemented).
+- **[Autopick safety net] "Seconds remaining on the clock" source** — ~~unconfirmed~~ **resolved by not needing it.** `scripts/watch_for_timer_field.py` found nothing changing across League Settings or Picks while polling during a real turn — there's no discoverable ClickyDraft countdown timer via these endpoints (it may only exist on the websocket stream this project otherwise avoids, or not be exposed to a non-browser client at all). Rather than chase that further, the trigger was redefined as wall-clock idle time the tool itself observes on Bradley's turn (default 3 minutes) — see `src/clickydraft_assistant/turn_clock.py` and its caveat about needing the tool to run continuously through the draft. **Both prerequisites for the autopick safety net are now resolved** (submission confirmed + implemented, trigger mechanism redefined and implemented) — it's capable of firing for real once enabled.
 
 ## Next steps
 
