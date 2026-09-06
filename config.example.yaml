@@ -3,9 +3,10 @@
 league_id: 305751
 league_instance_id: 305775
 
-# Bradley's fantasyTeamId within this ClickyDraft league instance. Leave
-# blank and pass --team-name on the CLI the first time to resolve it from
-# the League Settings response instead.
+# Your fantasyTeamId within this ClickyDraft league instance. Leave blank
+# and set my_team_name below instead (your team's exact name as shown in
+# ClickyDraft/Yahoo) — the tool resolves the ID from League Settings
+# automatically on startup.
 my_team_id:
 my_team_name: null
 
